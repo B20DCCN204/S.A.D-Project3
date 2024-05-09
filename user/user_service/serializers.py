@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, FullName, Address, Account
+from .models import User, FullName, Address
 
 
 class FullNameSerializer(serializers.ModelSerializer):
@@ -12,38 +12,29 @@ class AddressSerializer(serializers.ModelSerializer):
         model = Address
         fields = ['no_house', 'street', 'district', 'city']
 
-class AccountSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Account
-        fields = ['email', 'password']
-        extra_kwargs = {"password": {"write_only": True}}
-
 class UserSerializer(serializers.ModelSerializer):
     fullname = FullNameSerializer()
     address = AddressSerializer()
-    account = AccountSerializer()
 
     class Meta:
         model = User
-        fields = ["id", "fullname", "address", "account"]
+        fields = ["id", "email", "password", "fullname", "address"]
+        extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
-        account_data = validated_data.pop('account')
-        password = account_data.pop('password')
-
+        password = validated_data.pop('password', None)
         fullname_data = validated_data.pop('fullname')
         address_data = validated_data.pop('address')
 
         fullname = FullName.objects.create(**fullname_data)
         address = Address.objects.create(**address_data)
 
-        account = Account.objects.create(email=account_data['email'])
-        account.set_password(password)
-        account.save()
-
         user = User.objects.create(
+            email=validated_data['email'],
             fullname=fullname,
-            address=address,
-            account=account
+            address=address
         )
+        if password is not None:
+            user.set_password(password)
+        user.save()
         return user

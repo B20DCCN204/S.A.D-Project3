@@ -12,19 +12,15 @@ class Address(models.Model):
     district = models.CharField(max_length=255)
     city = models.CharField(max_length=255)
 
-class Account(models.Model):
-    email = models.EmailField(max_length=255, unique=True)
-    password = models.CharField(max_length=255)
-
 
 class User(AbstractUser):
     fullname = models.OneToOneField(FullName, on_delete=models.CASCADE)
-    account = models.OneToOneField(Account, on_delete=models.CASCADE)
+    email = models.EmailField(max_length=255, unique=True)
+    password = models.CharField(max_length=255)
     address = models.OneToOneField(Address, on_delete=models.CASCADE)
     username = None
     first_name = None
     last_name = None
-    email = None
-    password = None
 
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
