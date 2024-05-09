@@ -1,6 +1,9 @@
+# serializers.py
+from django.contrib.auth import authenticate
 from rest_framework import serializers
-from .models import User, FullName, Address, Account
-
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.models import User
+from .models import FullName, Address, Account
 
 class FullNameSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,10 +16,17 @@ class AddressSerializer(serializers.ModelSerializer):
         fields = ['no_house', 'street', 'district', 'city']
 
 class AccountSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+
     class Meta:
         model = Account
         fields = ['email', 'password']
-        extra_kwargs = {"password": {"write_only": True}}
+
+    def create(self, validated_data):
+        account = Account(email=validated_data['email'])
+        account.set_password(validated_data['password'])
+        account.save()
+        return account
 
 class UserSerializer(serializers.ModelSerializer):
     fullname = FullNameSerializer()
@@ -25,20 +35,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "fullname", "address", "account"]
+        fields = ['fullname', 'address', 'account']
 
     def create(self, validated_data):
-        account_data = validated_data.pop('account')
-        password = account_data.pop('password')
-
         fullname_data = validated_data.pop('fullname')
         address_data = validated_data.pop('address')
+        account_data = validated_data.pop('account')
 
         fullname = FullName.objects.create(**fullname_data)
         address = Address.objects.create(**address_data)
 
         account = Account.objects.create(email=account_data['email'])
-        account.set_password(password)
+        account.set_password(account_data['password'])
         account.save()
 
         user = User.objects.create(
@@ -47,3 +55,27 @@ class UserSerializer(serializers.ModelSerializer):
             account=account
         )
         return user
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+
+    def validate(self, attrs):
+        email = attrs.get('email')
+        password = attrs.get('password')
+
+        if email and password:
+            user = authenticate(email=email, password=password)
+            if user:
+                if not user.is_active:
+                    msg = 'User account is disabled.'
+                    raise serializers.ValidationError(msg, code='authorization')
+            else:
+                msg = 'Unable to log in with provided credentials.'
+                raise serializers.ValidationError(msg, code='authorization')
+        else:
+            msg = 'Must include "email" and "password".'
+            raise serializers.ValidationError(msg, code='authorization')
+
+        attrs['user'] = user
+        return attrs
